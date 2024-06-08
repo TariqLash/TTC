@@ -13,7 +13,7 @@
 
 // Layout of Functions:
 // constructor
-// receive functino (if exists)
+// receive function (if exists)
 // fallback function (if exists)
 // external
 // public
