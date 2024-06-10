@@ -16,6 +16,7 @@ contract TTCEngineTest is Test{
     TTCEngine ttce;
     HelperConfig config;
     address ethUSDPriceFeed;
+    address btcUSDPriceFeed;
     address weth;
 
     address public USER = makeAddr("user");
@@ -25,9 +26,26 @@ contract TTCEngineTest is Test{
     function setUp() public {
         deployer = new DeployTTC();
         (ttc, ttce, config) = deployer.run();
-        (ethUSDPriceFeed,, weth,,) = config.activeNetworkConfig();
+        (ethUSDPriceFeed, btcUSDPriceFeed, weth,,) = config.activeNetworkConfig();
 
         ERC20Mock(weth).mint(USER,STARTING_ERC20_BALANCE);
+    }
+
+    //=================================//
+    //        Constructor Tests        //
+    //=================================//
+    
+    address[] public tokenAddresses;
+    address[] public priceFeedAddresses;
+
+    
+    function testRevertsIfTokenLengthDoesntMatchPriceFeeds() public {
+        tokenAddresses.push(weth);
+        priceFeedAddresses.push(ethUSDPriceFeed);
+        priceFeedAddresses.push(btcUSDPriceFeed);
+
+        vm.expectRevert(TTCEngine.TTCEngine__TokenAddressesAndPriceFeedAddressesMustBeSameLength.selector);
+        new TTCEngine(tokenAddresses, priceFeedAddresses, address(ttc));
     }
 
     //===========================//
@@ -40,6 +58,14 @@ contract TTCEngineTest is Test{
         uint256 expectedUSD = 30000e18;
         uint256 actualUSD = ttce.getUSDValue(weth,ethAmount);
         assertEq(expectedUSD,actualUSD);
+    }
+
+    function testGetTokenAmountFromUSD() public {
+        uint256 usdAmount = 100 ether;
+        // $2000 / ETH, $100
+        uint256 expectedWeth = 0.05 ether;
+        uint256 actualWeth = ttce.getTokenAmountFromUSD(weth, usdAmount);
+        assertEq(expectedWeth, actualWeth);
     }
 
     //=======================================//
@@ -55,4 +81,15 @@ contract TTCEngineTest is Test{
         vm.stopPrank();
     }
 
+    function testRevertsWithUnapprovedCollateral() public {
+        ERC20Mock ranToken = new ERC20Mock();
+        vm.startPrank(USER);
+        vm.expectRevert(TTCEngine.TTCEngine__NotAllowedToken.selector);
+        ttce.depositCollateral(address(ranToken), AMOUNT_COLLATERAL);
+        vm.stopPrank();
+
+    }
+
 }
+
+// 3:03:23
