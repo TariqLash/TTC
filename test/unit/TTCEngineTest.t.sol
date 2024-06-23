@@ -22,6 +22,9 @@ contract TTCEngineTest is Test{
     address public USER = makeAddr("user");
     uint256 public AMOUNT_COLLATERAL = 10 ether;
     uint256 public constant STARTING_ERC20_BALANCE = 10 ether;
+    uint256 public STARTING_MINT_BALANCE = 100;
+    uint256 public BURN_AMOUNT = 50;
+
 
     function setUp() public {
         deployer = new DeployTTC();
@@ -60,11 +63,11 @@ contract TTCEngineTest is Test{
         assertEq(expectedUSD,actualUSD);
     }
 
-    function testGetTokenAmountFromUSD() public {
+    function testGetTokenAmountFromUsd() public {
         uint256 usdAmount = 100 ether;
         // $2000 / ETH, $100
         uint256 expectedWeth = 0.05 ether;
-        uint256 actualWeth = ttce.getTokenAmountFromUSD(weth, usdAmount);
+        uint256 actualWeth = ttce.getTokenAmountFromUsd(weth, usdAmount);
         assertEq(expectedWeth, actualWeth);
     }
 
@@ -87,9 +90,85 @@ contract TTCEngineTest is Test{
         vm.expectRevert(TTCEngine.TTCEngine__NotAllowedToken.selector);
         ttce.depositCollateral(address(ranToken), AMOUNT_COLLATERAL);
         vm.stopPrank();
-
     }
 
+    // deposits 10 ether to use as collateral
+    modifier depositedCollateral() {
+        vm.startPrank(USER);
+        ERC20Mock(weth).approve(address(ttce), AMOUNT_COLLATERAL);
+        ttce.depositCollateral(weth, AMOUNT_COLLATERAL);
+        vm.stopPrank();
+        _;
+    }
+
+    function testCanDepositCollateralAndGetAccountInfo() public depositedCollateral {
+
+        (uint256 totalTtcMinted, uint256 collateralValueInUsd) = ttce.getAccountInfo(USER);
+
+        uint256 expectedTotalTtcMinted = 0;
+
+        uint256 startingDepositAmount = ttce.getTokenAmountFromUsd(weth, collateralValueInUsd);
+        uint256 expectedDepositAmount =AMOUNT_COLLATERAL;
+
+        assertEq(totalTtcMinted, expectedTotalTtcMinted);
+        assertEq(startingDepositAmount, expectedDepositAmount);
+    }
+
+    //=============================//
+    //        mintTTC Tests        //
+    //=============================//
+
+    function testRevertsIfMintAmountZero() public {
+        vm.startPrank(USER);
+        ERC20Mock(weth).approve(address(ttce), AMOUNT_COLLATERAL);
+
+        vm.expectRevert(TTCEngine.TTCEngine__NeedsMoreThanZero.selector);
+        ttce.mintTTC(0);
+        vm.stopPrank();
+    }
+
+    // mints 100 TTC
+    modifier mintTTC() {
+        vm.startPrank(USER);
+        ERC20Mock(weth).approve(address(ttce), STARTING_MINT_BALANCE);
+        ttce.mintTTC(STARTING_MINT_BALANCE);        
+        vm.stopPrank();
+        _;
+    }
+
+    function testMintTTC() public depositedCollateral mintTTC {
+
+        (uint256 totalTtcMinted, uint256 collateralValueInUsd) = ttce.getAccountInfo(USER);
+        uint256 expectedTotalTtcMinted = STARTING_MINT_BALANCE;
+        assertEq(totalTtcMinted, expectedTotalTtcMinted);
+        
+    }
+
+    //=============================//
+    //        burnTTC Tests        //
+    //=============================//
+
+    function testRevertsIfBurnAmountZero() public {
+        vm.startPrank(USER);
+        ERC20Mock(weth).approve(address(ttce), AMOUNT_COLLATERAL);
+
+        vm.expectRevert(TTCEngine.TTCEngine__NeedsMoreThanZero.selector);
+        ttce.burnTTC(0);
+        vm.stopPrank();
+    }
+
+    function testBurnTTC() 
+        public
+        depositedCollateral
+        mintTTC 
+    {
+        ttce.burnTTC(1);
+
+        (uint256 totalTtcMinted, uint256 collateralValueInUsd) = ttce.getAccountInfo(USER);
+        assertEq(totalTtcMinted, 0);
+
+        
+    }
 }
 
-// 3:03:23
+// 3:13

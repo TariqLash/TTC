@@ -248,7 +248,7 @@ contract TTCEngine is ReentrancyGuard {
             revert TTCEngine__HealthFactorOk();
         }
         // we want to burn their TTC "debt" and take their collateral
-        uint256 tokenAmountFromDebtCovered = getTokenAmountFromUSD(collateral, debtToCover);
+        uint256 tokenAmountFromDebtCovered = getTokenAmountFromUsd(collateral, debtToCover);
         // and give them a 10% bonus
         // so we are giving the liquidator $110 of WETH for 100 TTC
         // we should implement a feature to liquidate in the event the protocol is insolvent
@@ -286,7 +286,9 @@ contract TTCEngine is ReentrancyGuard {
     function _burnTTC(uint256 amountTTCToBurn, address onBehalfOf, address ttcFrom)
         private
     {
-        s_TTCMinted[onBehalfOf] -= amountTTCToBurn;
+        unchecked {
+            s_TTCMinted[onBehalfOf] -= amountTTCToBurn;
+        }
         bool success = i_ttc.transferFrom(ttcFrom, address(this), amountTTCToBurn);
 
         // this condition is hypothetically unreachable since we will be sending transferFrom error
@@ -318,6 +320,15 @@ contract TTCEngine is ReentrancyGuard {
         collateralValueInUSD = getAccountCollateralValue(user);
     }
 
+    function _getUSDValue(address token, uint256 amount)
+        private
+        view
+        returns(uint256)
+    {
+        AggregatorV3Interface priceFeed = AggregatorV3Interface(s_priceFeeds[token]);
+        (, int256 price,,,) = priceFeed.latestRoundData();
+    }
+
     /*
      * Returns how close to liquidation a user is
      * If a user goes below 1, then they can get liquidated
@@ -327,9 +338,18 @@ contract TTCEngine is ReentrancyGuard {
         view 
         returns (uint256)
     {
-        (uint256 totalTTCMinted, uint256 collateralValueInUSD) = _getAccountInformation(user);
-        uint256 collateralAdjustedForThreshold = (collateralValueInUSD * LIQUIDATION_THRESHOLD) / LIQUIDATION_PRECISION;
-        return (collateralAdjustedForThreshold * PRECISION) / totalTTCMinted;
+        (uint256 totalTtcMinted, uint256 collateralValueInUsd) = _getAccountInformation(user);
+        return _calculateHealthFactor(totalTtcMinted, collateralValueInUsd);
+    }
+
+   function _calculateHealthFactor(uint256 totalTtcMinted, uint256 collateralValueInUsd)
+        internal
+        pure
+        returns(uint256)
+    {
+        if(totalTtcMinted == 0) return type(uint256).max;
+        uint256 collateralAdjustedForThreshold = (collateralValueInUsd * LIQUIDATION_THRESHOLD)/ LIQUIDATION_PRECISION;
+        return (collateralAdjustedForThreshold * 1e18) / totalTtcMinted;
     }
 
     function _revertIfHealthFactorIsBroken(address user) 
@@ -346,7 +366,7 @@ contract TTCEngine is ReentrancyGuard {
     //        Public & External View Functions        //
     //================================================//
 
-    function getTokenAmountFromUSD(address token, uint256 usdAmountInWei)
+    function getTokenAmountFromUsd(address token, uint256 usdAmountInWei)
         public
         view
         returns(uint256)
@@ -382,6 +402,17 @@ contract TTCEngine is ReentrancyGuard {
 
         return ((uint256(price) * ADDITIONAL_FEED_PRECISION) * amount) / PRECISION;
     }
+
+ 
+    function getAccountInfo(address user)
+        external
+        view
+        returns(uint256 totalTtcMinted, uint256 collateralValueInUsd)
+    {
+        (totalTtcMinted, collateralValueInUsd) = _getAccountInformation(user);
+
+
+    }
 }
 
-// 2:54:01
+// 3:17
