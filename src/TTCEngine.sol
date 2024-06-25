@@ -149,6 +149,8 @@ contract TTCEngine is ReentrancyGuard {
         mintTTC(amountTTCToMint);
     }
 
+    //==============================================================================
+
     /**
      * 
      * @notice follows CEI
@@ -169,6 +171,8 @@ contract TTCEngine is ReentrancyGuard {
         }
     }
 
+    //==============================================================================
+
     /**
      * 
      * @param tokenCollateralAddress The collateral address to redeem
@@ -185,6 +189,8 @@ contract TTCEngine is ReentrancyGuard {
         // redeemCollateral already checks health factor
     }
 
+    //==============================================================================
+
     // in order to redeem collateral:
     // 1. health factor must be over 1 AFTER collateral pulled
     function redeemCollateral(address tokenCollateralAddress, uint256 amountCollateral) 
@@ -195,6 +201,8 @@ contract TTCEngine is ReentrancyGuard {
         _redeemCollateral(msg.sender, msg.sender, tokenCollateralAddress, amountCollateral);
         _revertIfHealthFactorIsBroken(msg.sender);
     }
+
+    //==============================================================================
 
     /**
      * @notice follows CEI
@@ -214,6 +222,8 @@ contract TTCEngine is ReentrancyGuard {
             revert TTCEngine__MintFailed();
         }
     }
+       
+    //==============================================================================
 
     function burnTTC(uint256 amount) 
         public 
@@ -222,6 +232,8 @@ contract TTCEngine is ReentrancyGuard {
         _burnTTC(amount, msg.sender, msg.sender);
         i_ttc.burn(amount);
     }
+
+    //==============================================================================
 
     /**
      * 
@@ -268,6 +280,8 @@ contract TTCEngine is ReentrancyGuard {
         _revertIfHealthFactorIsBroken(msg.sender);
     }
 
+    //==============================================================================
+
     function getHealthFactor() 
         external 
         view 
@@ -298,6 +312,8 @@ contract TTCEngine is ReentrancyGuard {
         i_ttc.burn(amountTTCToBurn);
     }
 
+    //==============================================================================
+
     function _redeemCollateral(address from, address to, address tokenCollateralAddress, uint256 amountCollateral)
         private
     {
@@ -310,6 +326,7 @@ contract TTCEngine is ReentrancyGuard {
         }
     } 
 
+    //==============================================================================
 
     function _getAccountInformation(address user) 
         private
@@ -320,14 +337,20 @@ contract TTCEngine is ReentrancyGuard {
         collateralValueInUSD = getAccountCollateralValue(user);
     }
 
-    function _getUSDValue(address token, uint256 amount)
+    //==============================================================================
+
+    function _getUsdValue(address token, uint256 amount)
         private
         view
         returns(uint256)
     {
         AggregatorV3Interface priceFeed = AggregatorV3Interface(s_priceFeeds[token]);
         (, int256 price,,,) = priceFeed.latestRoundData();
+        return ((uint256(price) * ADDITIONAL_FEED_PRECISION) * amount) / PRECISION;
+
     }
+
+    //==============================================================================
 
     /*
      * Returns how close to liquidation a user is
@@ -342,7 +365,9 @@ contract TTCEngine is ReentrancyGuard {
         return _calculateHealthFactor(totalTtcMinted, collateralValueInUsd);
     }
 
-   function _calculateHealthFactor(uint256 totalTtcMinted, uint256 collateralValueInUsd)
+    //==============================================================================
+
+    function _calculateHealthFactor(uint256 totalTtcMinted, uint256 collateralValueInUsd)
         internal
         pure
         returns(uint256)
@@ -351,6 +376,8 @@ contract TTCEngine is ReentrancyGuard {
         uint256 collateralAdjustedForThreshold = (collateralValueInUsd * LIQUIDATION_THRESHOLD)/ LIQUIDATION_PRECISION;
         return (collateralAdjustedForThreshold * 1e18) / totalTtcMinted;
     }
+
+    //==============================================================================
 
     function _revertIfHealthFactorIsBroken(address user) 
         internal 
@@ -366,15 +393,45 @@ contract TTCEngine is ReentrancyGuard {
     //        Public & External View Functions        //
     //================================================//
 
-    function getTokenAmountFromUsd(address token, uint256 usdAmountInWei)
-        public
+    function calculateHealthFactor(uint256 totalTtcMinted, uint256 collateralValueInUsd)
+        external
+        pure
+        returns(uint256)
+    {
+        return _calculateHealthFactor(totalTtcMinted, collateralValueInUsd);
+    }
+
+    //==============================================================================
+
+    function getAccountInfo(address user)
+        external
+        view
+        returns(uint256 totalTtcMinted, uint256 collateralValueInUsd)
+    {
+        (totalTtcMinted, collateralValueInUsd) = _getAccountInformation(user);
+    }
+
+    //==============================================================================
+
+    function getUsdValue(address token, uint256 amount) 
+        external 
+        view 
+        returns(uint256)
+    {
+        return _getUsdValue(token, amount);
+    }
+ 
+    //==============================================================================
+
+    function getCollateralBalanceOfUser(address user, address token)
+        external
         view
         returns(uint256)
     {
-        AggregatorV3Interface priceFeed = AggregatorV3Interface(s_priceFeeds[token]);
-        (,int256 price,,,) = priceFeed.latestRoundData();
-        return (usdAmountInWei * PRECISION) / (uint256(price) * ADDITIONAL_FEED_PRECISION);
+            return s_collateralDeposited[user][token];
     }
+
+    //==============================================================================
 
     function getAccountCollateralValue(address user) 
         public 
@@ -387,32 +444,126 @@ contract TTCEngine is ReentrancyGuard {
         for(uint256 i=0; i<s_collateralTokens.length; i++){
             address token = s_collateralTokens[i];
             uint256 amount = s_collateralDeposited[user][token];
-            totalCollateralValueInUSD += getUSDValue(token, amount);
+            totalCollateralValueInUSD += _getUsdValue(token, amount);
         }
         return totalCollateralValueInUSD;
     }
 
-    function getUSDValue(address token, uint256 amount) 
-        public 
-        view 
+    //==============================================================================
+
+    function getTokenAmountFromUsd(address token, uint256 usdAmountInWei)
+        public
+        view
         returns(uint256)
     {
         AggregatorV3Interface priceFeed = AggregatorV3Interface(s_priceFeeds[token]);
         (,int256 price,,,) = priceFeed.latestRoundData();
-
-        return ((uint256(price) * ADDITIONAL_FEED_PRECISION) * amount) / PRECISION;
+        return (usdAmountInWei * PRECISION) / (uint256(price) * ADDITIONAL_FEED_PRECISION);
     }
 
- 
-    function getAccountInfo(address user)
-        external
-        view
-        returns(uint256 totalTtcMinted, uint256 collateralValueInUsd)
+    //==============================================================================
+
+    function getPrecision() 
+        external 
+        pure 
+        returns (uint256) 
     {
-        (totalTtcMinted, collateralValueInUsd) = _getAccountInformation(user);
-
-
+        return PRECISION;
     }
+ 
+    //==============================================================================
+
+    function getAdditionalFeedPrecision() 
+        external 
+        pure
+        returns (uint256) 
+    {
+        return ADDITIONAL_FEED_PRECISION;
+    }
+
+    //==============================================================================
+
+    function getLiquidationThreshold() 
+        external 
+        pure
+        returns (uint256) 
+    {
+        return LIQUIDATION_THRESHOLD;
+    }
+
+    //==============================================================================
+
+    function getLiquidationBonus() 
+        external 
+        pure
+        returns (uint256) 
+    {
+        return LIQUIDATION_BONUS;
+    }
+
+    //==============================================================================
+
+    function getLiquidationPrecision() 
+        external 
+        pure
+        returns (uint256) 
+    {
+        return LIQUIDATION_PRECISION;
+    }
+
+    //==============================================================================
+
+    function getMinHealthFactor() 
+        external 
+        pure
+        returns (uint256) 
+    {
+        return MIN_HEALTH_FACTOR;
+    }
+
+    //==============================================================================
+
+    function getCollateralTokens() 
+        external 
+        view
+        returns (address[] memory) 
+    {
+        return s_collateralTokens;
+    }
+
+    //==============================================================================
+
+    function getTtc() 
+        external 
+        view
+        returns (address) 
+    {
+        return address(i_ttc);
+    }
+
+    //==============================================================================
+
+    function getCollateralTokenPriceFeed(address token) 
+        external 
+        view 
+        returns (address) 
+    {
+        return s_priceFeeds[token];
+    }
+
+    //==============================================================================
+
+    function getHealthFactor(address user) 
+        external 
+        view 
+        returns (uint256) 
+    {
+        return _healthFactor(user);
+    }
+
+    //==============================================================================
+    //==============================================================================
+
 }
 
 // 3:17
