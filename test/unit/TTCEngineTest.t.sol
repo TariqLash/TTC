@@ -8,6 +8,7 @@ import {TTCStableCoin} from "../../src/TTCStableCoin.sol";
 import {TTCEngine} from "../../src/TTCEngine.sol";
 import {HelperConfig} from "../../script/HelperConfig.s.sol";
 import {ERC20Mock} from "@openzeppelin/contracts/mocks/token/ERC20Mock.sol";
+import {MockFailedTransferFrom} from "../mocks/MockFailedTransferFrom.sol";
 
 
 contract TTCEngineTest is Test{
@@ -55,11 +56,11 @@ contract TTCEngineTest is Test{
     //        Price Tests        //
     //===========================//
 
-    function testGetUSDValue() public {
+    function testGetUsdValue() public {
         uint256 ethAmount = 15e18;
         // 15e18 * 2000/ETH = 30,000ee18
         uint256 expectedUSD = 30000e18;
-        uint256 actualUSD = ttce.getUSDValue(weth,ethAmount);
+        uint256 actualUSD = ttce.getUsdValue(weth,ethAmount);
         assertEq(expectedUSD,actualUSD);
     }
 
@@ -74,6 +75,30 @@ contract TTCEngineTest is Test{
     //=======================================//
     //        depositCollateral Tests        //
     //=======================================//
+
+    function testRevertsIfTransferFromFails() public {
+        // Setup
+        address owner = msg.sender;
+        vm.prank(owner);
+        MockFailedTransferFrom mockTtc = new MockFailedTransferFrom();
+        tokenAddress = [address(mockTtc)];
+        feedAddressees = [ethUSDPriceFeed];
+        vm.prank(owner);
+        TTCEngine mockTtce = new TTCEngine(tokenAddresses, feedAddresses, address(mockTtc));
+        
+        vm.prank(owner);
+        mockTtc.transferOwnership(address(mockTtce));
+
+        // Arrange - User
+        vm.startPrank(user);
+        ERC20Mock(address(mockTtc)).approve(address(mockTtce), amountCollateral);
+
+        // Act/assert
+        vm.expectRevert(TTCEngine.TTCEngine__TransferFailed.selector);
+        mockTtce.depositCollateral(address(mockTtc), amountCollateral);
+        
+        vm.stopPrank();
+    }
 
     function testRevertsIfCollateralZero() public {
         vm.startPrank(USER);
@@ -99,6 +124,16 @@ contract TTCEngineTest is Test{
         ttce.depositCollateral(weth, AMOUNT_COLLATERAL);
         vm.stopPrank();
         _;
+    }
+
+    function testCanDepositCollateralWithoutMinting() public depositedCollateral {
+        uint256 userBalance = ttc.balanceOf(user);
+        assertEq(userBalance, 0)
+
+
+
+//hehrehrehrherhehrehrerhrh
+
     }
 
     function testCanDepositCollateralAndGetAccountInfo() public depositedCollateral {
