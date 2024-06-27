@@ -128,12 +128,7 @@ contract TTCEngineTest is Test{
 
     function testCanDepositCollateralWithoutMinting() public depositedCollateral {
         uint256 userBalance = ttc.balanceOf(user);
-        assertEq(userBalance, 0)
-
-
-
-//hehrehrehrherhehrehrerhrh
-
+        assertEq(userBalance, 0);
     }
 
     function testCanDepositCollateralAndGetAccountInfo() public depositedCollateral {
@@ -177,6 +172,14 @@ contract TTCEngineTest is Test{
         uint256 expectedTotalTtcMinted = STARTING_MINT_BALANCE;
         assertEq(totalTtcMinted, expectedTotalTtcMinted);
         
+    }
+
+    function testCanMintDsc() public depositedCollateral {
+        vm.prank(user);
+        dsce.mintDsc(amountToMint);
+
+        uint256 userBalance = dsc.balanceOf(user);
+        assertEq(userBalance, amountToMint);
     }
 
     //=============================//
