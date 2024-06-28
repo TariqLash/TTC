@@ -144,6 +144,19 @@ contract TTCEngineTest is Test{
         assertEq(startingDepositAmount, expectedDepositAmount);
     }
 
+        modifier depositedCollateralAndMintedTtc() {
+        vm.startPrank(user);
+        ERC20Mock(weth).approve(address(ttce), amountCollateral);
+        ttce.depositCollateralAndMintDsc(weth, amountCollateral, amountToMint);
+        vm.stopPrank();
+        _;
+    }
+
+    function testCanMintWithDepositedCollateral() public depositedCollateralAndMintedDsc {
+        uint256 userBalance = ttc.balanceOf(user);
+        assertEq(userBalance, amountToMint);
+    }
+
     //=============================//
     //        mintTTC Tests        //
     //=============================//
