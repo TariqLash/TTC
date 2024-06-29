@@ -44,11 +44,14 @@ contract TTCStableCoin is ERC20Burnable, Ownable{
     error TTCStableCoin__BurnAmountExceedsBalance();
     error TTCStableCoin__NotZeroAddress();
 
+    event testingBurn(uint256 balance);
 
     constructor() Ownable(msg.sender) ERC20("TTCStableCoin", "TTC") {}
 
     function burn(uint256 _amount) public override onlyOwner{
         uint256 balance = balanceOf(msg.sender);
+        emit testingBurn(balance);
+
         if(_amount <= 0){
             revert TTCStableCoin__MustBeMoreThanZero();
         }

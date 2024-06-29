@@ -13,17 +13,18 @@ import {MockFailedTransferFrom} from "../mocks/MockFailedTransferFrom.sol";
 
 contract TTCEngineTest is Test{
     DeployTTC deployer;
-    TTCStableCoin ttc;
-    TTCEngine ttce;
-    HelperConfig config;
+    TTCStableCoin public ttc;
+    TTCEngine public ttce;
+    HelperConfig public config;
     address ethUSDPriceFeed;
     address btcUSDPriceFeed;
     address weth;
 
-    address public USER = makeAddr("user");
+    address public USER = address(1);
     uint256 public AMOUNT_COLLATERAL = 10 ether;
     uint256 public constant STARTING_ERC20_BALANCE = 10 ether;
-    uint256 public STARTING_MINT_BALANCE = 100;
+    uint256 public AMOUNT_TO_MINT = 100 ether;
+
     uint256 public BURN_AMOUNT = 50;
 
 
@@ -40,16 +41,16 @@ contract TTCEngineTest is Test{
     //=================================//
     
     address[] public tokenAddresses;
-    address[] public priceFeedAddresses;
+    address[] public feedAddresses;
 
     
     function testRevertsIfTokenLengthDoesntMatchPriceFeeds() public {
         tokenAddresses.push(weth);
-        priceFeedAddresses.push(ethUSDPriceFeed);
-        priceFeedAddresses.push(btcUSDPriceFeed);
+        feedAddresses.push(ethUSDPriceFeed);
+        feedAddresses.push(btcUSDPriceFeed);
 
         vm.expectRevert(TTCEngine.TTCEngine__TokenAddressesAndPriceFeedAddressesMustBeSameLength.selector);
-        new TTCEngine(tokenAddresses, priceFeedAddresses, address(ttc));
+        new TTCEngine(tokenAddresses, feedAddresses, address(ttc));
     }
 
     //===========================//
@@ -81,8 +82,8 @@ contract TTCEngineTest is Test{
         address owner = msg.sender;
         vm.prank(owner);
         MockFailedTransferFrom mockTtc = new MockFailedTransferFrom();
-        tokenAddress = [address(mockTtc)];
-        feedAddressees = [ethUSDPriceFeed];
+        tokenAddresses = [address(mockTtc)];
+        feedAddresses = [ethUSDPriceFeed];
         vm.prank(owner);
         TTCEngine mockTtce = new TTCEngine(tokenAddresses, feedAddresses, address(mockTtc));
         
@@ -90,12 +91,12 @@ contract TTCEngineTest is Test{
         mockTtc.transferOwnership(address(mockTtce));
 
         // Arrange - User
-        vm.startPrank(user);
-        ERC20Mock(address(mockTtc)).approve(address(mockTtce), amountCollateral);
+        vm.startPrank(USER);
+        ERC20Mock(address(mockTtc)).approve(address(mockTtce), AMOUNT_COLLATERAL);
 
         // Act/assert
         vm.expectRevert(TTCEngine.TTCEngine__TransferFailed.selector);
-        mockTtce.depositCollateral(address(mockTtc), amountCollateral);
+        mockTtce.depositCollateral(address(mockTtc), AMOUNT_COLLATERAL);
         
         vm.stopPrank();
     }
@@ -127,7 +128,7 @@ contract TTCEngineTest is Test{
     }
 
     function testCanDepositCollateralWithoutMinting() public depositedCollateral {
-        uint256 userBalance = ttc.balanceOf(user);
+        uint256 userBalance = ttc.balanceOf(USER);
         assertEq(userBalance, 0);
     }
 
@@ -144,17 +145,17 @@ contract TTCEngineTest is Test{
         assertEq(startingDepositAmount, expectedDepositAmount);
     }
 
-        modifier depositedCollateralAndMintedTtc() {
-        vm.startPrank(user);
-        ERC20Mock(weth).approve(address(ttce), amountCollateral);
-        ttce.depositCollateralAndMintDsc(weth, amountCollateral, amountToMint);
+    modifier depositedCollateralAndMintedTtc() {
+        vm.startPrank(USER);
+        ERC20Mock(weth).approve(address(ttce), AMOUNT_COLLATERAL);
+        ttce.depositCollateralAndMintTTC(weth, AMOUNT_COLLATERAL, AMOUNT_TO_MINT);
         vm.stopPrank();
         _;
     }
 
-    function testCanMintWithDepositedCollateral() public depositedCollateralAndMintedDsc {
-        uint256 userBalance = ttc.balanceOf(user);
-        assertEq(userBalance, amountToMint);
+    function testCanMintWithDepositedCollateral() public depositedCollateralAndMintedTtc {
+        uint256 userBalance = ttc.balanceOf(USER);
+        assertEq(userBalance, AMOUNT_TO_MINT);
     }
 
     //=============================//
@@ -173,8 +174,8 @@ contract TTCEngineTest is Test{
     // mints 100 TTC
     modifier mintTTC() {
         vm.startPrank(USER);
-        ERC20Mock(weth).approve(address(ttce), STARTING_MINT_BALANCE);
-        ttce.mintTTC(STARTING_MINT_BALANCE);        
+        ERC20Mock(weth).approve(address(ttce), AMOUNT_TO_MINT);
+        ttce.mintTTC(AMOUNT_TO_MINT);        
         vm.stopPrank();
         _;
     }
@@ -182,17 +183,17 @@ contract TTCEngineTest is Test{
     function testMintTTC() public depositedCollateral mintTTC {
 
         (uint256 totalTtcMinted, uint256 collateralValueInUsd) = ttce.getAccountInfo(USER);
-        uint256 expectedTotalTtcMinted = STARTING_MINT_BALANCE;
+        uint256 expectedTotalTtcMinted = AMOUNT_TO_MINT;
         assertEq(totalTtcMinted, expectedTotalTtcMinted);
         
     }
 
     function testCanMintDsc() public depositedCollateral {
-        vm.prank(user);
-        dsce.mintDsc(amountToMint);
+        vm.prank(USER);
+        ttce.mintTTC(AMOUNT_TO_MINT);
 
-        uint256 userBalance = dsc.balanceOf(user);
-        assertEq(userBalance, amountToMint);
+        uint256 userBalance = ttc.balanceOf(USER);
+        assertEq(userBalance, AMOUNT_TO_MINT);
     }
 
     //=============================//
@@ -209,19 +210,21 @@ contract TTCEngineTest is Test{
     }
 
     function testCantBurnMoreThanUserHas() public {
-        vm.prank(user);
+        vm.prank(USER);
         vm.expectRevert();
-        ttce.burnTtc(1);
+        ttce.burnTTC(1);
     }
 
     function testCanBurnTtc() public depositedCollateralAndMintedTtc {
-        vm.startPrank(user);
-        ttc.approve(address(ttce), amountToMint);
-        ttce.burnTtc(amountToMint);
+        vm.startPrank(USER);
+        ttc.approve(address(ttce), AMOUNT_TO_MINT);
+
+        ttce.burnTTC(1 ether);
         vm.stopPrank();
 
-        uint256 userBalance = ttc.balanceOf(user);
+        uint256 userBalance = ttc.balanceOf(USER);
         assertEq(userBalance, 0);
+
     }
 }
 
