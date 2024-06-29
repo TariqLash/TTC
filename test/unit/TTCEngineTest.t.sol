@@ -208,17 +208,20 @@ contract TTCEngineTest is Test{
         vm.stopPrank();
     }
 
-    function testBurnTTC() 
-        public
-        depositedCollateral
-        mintTTC 
-    {
-        ttce.burnTTC(1);
+    function testCantBurnMoreThanUserHas() public {
+        vm.prank(user);
+        vm.expectRevert();
+        ttce.burnTtc(1);
+    }
 
-        (uint256 totalTtcMinted, uint256 collateralValueInUsd) = ttce.getAccountInfo(USER);
-        assertEq(totalTtcMinted, 0);
+    function testCanBurnTtc() public depositedCollateralAndMintedTtc {
+        vm.startPrank(user);
+        ttc.approve(address(ttce), amountToMint);
+        ttce.burnTtc(amountToMint);
+        vm.stopPrank();
 
-        
+        uint256 userBalance = ttc.balanceOf(user);
+        assertEq(userBalance, 0);
     }
 }
 
